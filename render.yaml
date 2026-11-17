@@ -1,0 +1,13 @@
+
+services:
+  - type: web
+    name: tahaqqaq-security
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app
+    plan: free
+    envVars:
+      - key: SECRET_KEY
+        generateValue: true
+      - key: VT_API_KEY
+        sync: false
