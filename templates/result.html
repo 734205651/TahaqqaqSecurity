@@ -1,1 +1,184 @@
-{% extends "base.html" %}{% block content %}<div class="panel p-4 mt-4"><h2 class="brand">نتيجة الفحص</h2><h4>{{ item }}</h4><h3 class="my-3">{{ verdict }}</h3><div class="progress my-3"><div class="progress-bar bg-danger" style="width:{{ percent }}%">{{ percent }}%</div></div><div class="row g-3">{% for label,value in [('ضار',malicious),('مشبوه',suspicious),('لم يجد مشكلة',harmless),('غير محسوم',undetected)] %}<div class="col-6 col-md-3"><div class="panel p-3">{{ label }}<br><strong>{{ value }}</strong></div></div>{% endfor %}</div>{% if digest %}<p class="muted mt-3">SHA-256: {{ digest }}</p>{% endif %}<p class="muted mt-3">النسبة حصة نتائج المحركات الضارة أو المشبوهة، وليست احتمال إصابة. عدم الكشف لا يثبت السلامة.</p><a class="btn btn-main mt-2" href="{{ url_for('dashboard') }}">العودة للوحة التحكم</a></div>{% endblock %}
+
+{% extends "base.html" %}
+
+{% block content %}
+
+<style>
+    .result-panel {
+        width: 100%;
+        max-width: 100%;
+        overflow: hidden;
+        padding: 24px;
+    }
+
+    .result-item {
+        display: block;
+        width: 100%;
+        max-width: 100%;
+        direction: ltr;
+        text-align: left;
+        overflow-wrap: anywhere;
+        word-break: break-word;
+        white-space: normal;
+        font-size: 15px;
+        color: #d9eaf5;
+        background: #18344d;
+        border: 1px solid #31536d;
+        border-radius: 10px;
+        padding: 12px;
+        margin: 12px 0;
+    }
+
+    .result-box {
+        height: 100%;
+        min-width: 0;
+        overflow-wrap: anywhere;
+        text-align: center;
+    }
+
+    .result-number {
+        font-size: 24px;
+        font-weight: bold;
+    }
+
+    .result-note {
+        line-height: 1.9;
+        overflow-wrap: anywhere;
+    }
+
+    .progress {
+        height: 25px;
+        overflow: hidden;
+        border-radius: 10px;
+    }
+
+    .progress-bar {
+        min-width: 0;
+    }
+
+    @media (max-width: 576px) {
+        .result-panel {
+            padding: 16px !important;
+            margin-top: 12px !important;
+        }
+
+        .result-panel h2 {
+            font-size: 23px;
+        }
+
+        .result-panel h3 {
+            font-size: 19px;
+        }
+
+        .result-item {
+            font-size: 13px;
+            padding: 10px;
+        }
+
+        .result-number {
+            font-size: 21px;
+        }
+
+        .result-box {
+            padding: 12px !important;
+        }
+
+        .result-panel .btn {
+            width: 100%;
+            white-space: normal;
+        }
+    }
+</style>
+
+<div class="panel result-panel mt-4">
+
+    <h2 class="brand mb-3">
+        نتيجة الفحص
+    </h2>
+
+    <h5 class="muted">
+        العنصر الذي تم فحصه:
+    </h5>
+
+    <div class="result-item" dir="ltr">
+        {{ item }}
+    </div>
+
+    <h3 class="my-4 text-center">
+        {{ verdict }}
+    </h3>
+
+    <div class="progress my-3">
+
+        <div
+            class="progress-bar bg-danger"
+            role="progressbar"
+            style="width: {{ percent }}%;"
+            aria-valuenow="{{ percent }}"
+            aria-valuemin="0"
+            aria-valuemax="100"
+        >
+            {{ percent }}%
+        </div>
+
+    </div>
+
+    <div class="row g-3 mt-3">
+
+        {% for label, value in [
+            ('ضار', malicious),
+            ('مشبوه', suspicious),
+            ('لم يجد مشكلة', harmless),
+            ('غير محسوم', undetected)
+        ] %}
+
+        <div class="col-6 col-md-3">
+
+            <div class="panel result-box p-3">
+
+                <div>{{ label }}</div>
+
+                <div class="result-number mt-2">
+                    {{ value }}
+                </div>
+
+            </div>
+
+        </div>
+
+        {% endfor %}
+
+    </div>
+
+    {% if digest is defined and digest %}
+
+    <div class="mt-4">
+
+        <h6 class="brand">
+            بصمة الملف SHA-256
+        </h6>
+
+        <div class="result-item" dir="ltr">
+            {{ digest }}
+        </div>
+
+    </div>
+
+    {% endif %}
+
+    <p class="muted result-note mt-4">
+        النسبة تمثل حصة نتائج محركات الفحص التي صنفت العنصر
+        على أنه ضار أو مشبوه، وليست احتمال الإصابة.
+        وعدم الكشف عن تهديد لا يثبت السلامة بشكل قطعي.
+    </p>
+
+    <a
+        class="btn btn-main btn-lg mt-3"
+        href="{{ url_for('index') }}"
+    >
+        العودة إلى الصفحة الرئيسية
+    </a>
+
+</div>
+
+{% endblock %}
