@@ -1,6 +1,7 @@
+
 import os
-import hashlib
 import time
+import hashlib
 from collections import deque
 from threading import Lock
 from urllib.parse import urlsplit
@@ -8,12 +9,8 @@ from urllib.parse import urlsplit
 import requests
 
 from flask import (
-    Flask,
-    render_template,
-    request,
-    redirect,
-    url_for,
-    flash
+    Flask, render_template, request,
+    redirect, url_for, flash
 )
 
 from flask_wtf import FlaskForm, CSRFProtect
@@ -22,91 +19,75 @@ from wtforms.validators import DataRequired, Length
 
 
 # ==========================================
-# T A H A Q Q A Q  6.0
+# T A H A Q Q A Q  7.0
 # منصة تَحَقَّق للأمن السيبراني
 # تصميم: محروس باحسين
-# دخول مباشر بدون حسابات
 # ==========================================
 
 APP_NAME = "تَحَقَّق"
-VERSION = "6.0"
+VERSION = "7.0"
 AUTHOR = "محروس باحسين"
 
 VT_API = "https://www.virustotal.com/api/v3"
-
-
-# ==========================================
-# APPLICATION
-# ==========================================
 
 app = Flask(__name__)
 
 app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY")
 
 if not app.config["SECRET_KEY"]:
-    raise RuntimeError(
-        "SECRET_KEY غير مضبوط في إعدادات Render."
-    )
+    raise RuntimeError("SECRET_KEY غير مضبوط في Render.")
 
-# الحد الأقصى لحجم الملف: 32 ميجابايت
 app.config["MAX_CONTENT_LENGTH"] = 32 * 1024 * 1024
 
 csrf = CSRFProtect(app)
 
 
 # ==========================================
-# RATE LIMITING
+# VIRUSTOTAL API REQUEST LIMITER
 # ==========================================
-# 4 طلبات كحد أقصى في الدقيقة
-# 500 طلب كحد أقصى في اليوم
-#
-# هذه النسخة تستخدم ذاكرة الخادم فقط.
-# عند إعادة تشغيل Render يتم تصفير العدادات.
+# الحد هنا على طلبات API الفعلية، وليس عمليات الفحص.
+# 4 طلبات في الدقيقة و500 طلب خلال 24 ساعة.
+# العدادات مؤقتة داخل عملية الخادم الحالية.
 
 RATE_LOCK = Lock()
+minute_requests = deque()
+daily_requests = deque()
 
 MINUTE_LIMIT = 4
 DAILY_LIMIT = 500
 
-minute_requests = deque()
-daily_requests = deque()
 
+def wait_for_api_slot():
 
-def check_rate_limit():
+    while True:
 
-    now = time.time()
+        with RATE_LOCK:
 
-    with RATE_LOCK:
+            now = time.time()
 
-        # حذف طلبات أقدم من دقيقة
-        while minute_requests and (
-            now - minute_requests[0] > 60
-        ):
-            minute_requests.popleft()
+            while minute_requests and now - minute_requests[0] >= 60:
+                minute_requests.popleft()
 
-        # حذف طلبات أقدم من 24 ساعة
-        while daily_requests and (
-            now - daily_requests[0] > 86400
-        ):
-            daily_requests.popleft()
+            while daily_requests and now - daily_requests[0] >= 86400:
+                daily_requests.popleft()
 
-        if len(minute_requests) >= MINUTE_LIMIT:
-            return False, (
-                "تم الوصول إلى الحد المؤقت: "
-                "4 فحوصات في الدقيقة. "
-                "انتظر قليلاً ثم حاول مرة أخرى."
+            if len(daily_requests) >= DAILY_LIMIT:
+                raise RuntimeError(
+                    "تم بلوغ الحد اليومي لطلبات الفحص. حاول لاحقاً."
+                )
+
+            if len(minute_requests) < MINUTE_LIMIT:
+
+                minute_requests.append(now)
+                daily_requests.append(now)
+                return
+
+            wait_time = max(
+                1,
+                60 - (now - minute_requests[0]) + 0.2
             )
 
-        if len(daily_requests) >= DAILY_LIMIT:
-            return False, (
-                "تم الوصول إلى الحد اليومي "
-                "للفحوصات. حاول غداً."
-            )
-
-        minute_requests.append(now)
-        daily_requests.append(now)
-
-    return True, None
+        time.sleep(wait_time)
 
 
 # ==========================================
@@ -124,7 +105,7 @@ class URLForm(FlaskForm):
     )
 
     consent = BooleanField(
-        "أوافق على إرسال الرابط إلى VirusTotal",
+        "أوافق",
         validators=[DataRequired()]
     )
 
@@ -132,27 +113,22 @@ class URLForm(FlaskForm):
 class FileConsentForm(FlaskForm):
 
     consent = BooleanField(
-        "أوافق على رفع الملف إلى VirusTotal",
+        "أوافق",
         validators=[DataRequired()]
     )
 
 
 # ==========================================
-# VIRUSTOTAL CONFIGURATION
+# API CONFIGURATION
 # ==========================================
 
 def vt_headers():
 
-    key = os.environ.get(
-        "VT_API_KEY",
-        ""
-    ).strip()
+    key = os.environ.get("VT_API_KEY", "").strip()
 
     if not key:
-
         raise RuntimeError(
-            "فحص VirusTotal غير مفعّل حالياً. "
-            "أضف VT_API_KEY في إعدادات Render."
+            "خدمة الفحص الخارجي غير مفعّلة حالياً."
         )
 
     return {
@@ -161,102 +137,132 @@ def vt_headers():
     }
 
 
+def vt_request(method, endpoint, **kwargs):
+
+    wait_for_api_slot()
+
+    response = requests.request(
+        method,
+        f"{VT_API}/{endpoint.lstrip('/')}",
+        headers=vt_headers(),
+        timeout=kwargs.pop("timeout", 30),
+        **kwargs
+    )
+
+    response.raise_for_status()
+
+    return response
+
+
 # ==========================================
-# ANALYSIS RESULTS
+# REAL SCAN STATISTICS
 # ==========================================
 
 def stats_result(stats):
 
-    malicious = int(
-        stats.get("malicious", 0) or 0
-    )
+    malicious = int(stats.get("malicious", 0) or 0)
+    suspicious = int(stats.get("suspicious", 0) or 0)
+    harmless = int(stats.get("harmless", 0) or 0)
+    undetected = int(stats.get("undetected", 0) or 0)
 
-    suspicious = int(
-        stats.get("suspicious", 0) or 0
-    )
+    # إجمالي المحركات التي أعطت إحدى النتائج الأربع.
+    # لا نحتسب timeout أو failure كمحركات أصدرت حكماً.
 
-    harmless = int(
-        stats.get("harmless", 0) or 0
-    )
-
-    undetected = int(
-        stats.get("undetected", 0) or 0
-    )
-
-    total = sum(
-        int(stats.get(k, 0) or 0)
-        for k in (
-            "malicious",
-            "suspicious",
-            "harmless",
-            "undetected",
-            "timeout",
-            "failure"
-        )
+    total = (
+        malicious +
+        suspicious +
+        harmless +
+        undetected
     )
 
     percentage = (
         round(
-            100 * (malicious + suspicious) / total,
+            ((malicious + suspicious) / total) * 100,
             1
         )
         if total else 0
     )
 
-    if malicious:
-        verdict = "ضار"
+    if total == 0:
+        verdict = "لا توجد نتائج مكتملة"
+        risk_level = "غير محسوم"
 
-    elif suspicious:
-        verdict = "مشبوه"
+    elif malicious > 0:
+        verdict = "تم اكتشاف مؤشرات ضارة"
+        risk_level = "خطورة مرتفعة"
+
+    elif suspicious > 0:
+        verdict = "تم اكتشاف مؤشرات مشبوهة"
+        risk_level = "يحتاج إلى الحذر"
 
     else:
         verdict = "لم ترصد المحركات مؤشرات ضارة"
+        risk_level = "لم ترصد مؤشرات ضارة"
 
-    return (
-        malicious,
-        suspicious,
-        harmless,
-        undetected,
-        percentage,
-        verdict
-    )
+    return {
+        "malicious": malicious,
+        "suspicious": suspicious,
+        "harmless": harmless,
+        "undetected": undetected,
+        "total": total,
+        "percent": percentage,
+        "verdict": verdict,
+        "risk_level": risk_level
+    }
 
 
 # ==========================================
-# WAIT FOR VIRUSTOTAL ANALYSIS
+# WAIT FOR ANALYSIS
 # ==========================================
 
 def poll_analysis(analysis_id):
 
     for _ in range(18):
 
-        response = requests.get(
-            f"{VT_API}/analyses/{analysis_id}",
-            headers=vt_headers(),
-            timeout=25
+        response = vt_request(
+            "GET",
+            f"analyses/{analysis_id}",
+            timeout=30
         )
 
-        response.raise_for_status()
-
         attributes = response.json().get(
-            "data",
-            {}
+            "data", {}
         ).get(
-            "attributes",
-            {}
+            "attributes", {}
         )
 
         if attributes.get("status") == "completed":
 
-            return attributes.get(
-                "stats",
-                {}
-            )
+            return attributes.get("stats", {})
 
         time.sleep(5)
 
     raise RuntimeError(
-        "لم يكتمل التحليل خلال وقت الانتظار."
+        "لم يكتمل الفحص خلال وقت الانتظار."
+    )
+
+
+# ==========================================
+# RESULT PAGE
+# ==========================================
+
+def show_result(item, kind, stats, digest=None):
+
+    result = stats_result(stats)
+
+    return render_template(
+        "result.html",
+        item=item,
+        kind=kind,
+        malicious=result["malicious"],
+        suspicious=result["suspicious"],
+        harmless=result["harmless"],
+        undetected=result["undetected"],
+        total=result["total"],
+        percent=result["percent"],
+        verdict=result["verdict"],
+        risk_level=result["risk_level"],
+        digest=digest
     )
 
 
@@ -267,99 +273,68 @@ def poll_analysis(analysis_id):
 @app.route("/")
 def index():
 
-    return render_template(
-        "index.html"
-    )
+    return render_template("index.html")
 
 
 # ==========================================
-# OLD ACCOUNT ROUTES
+# DISABLE OLD ACCOUNT PAGES
 # ==========================================
-# لا يوجد تسجيل أو دخول.
-# هذه المسارات موجودة فقط حتى لا تظهر
-# أخطاء إذا كانت هناك روابط قديمة في القوالب.
 
 @app.route("/register", methods=["GET", "POST"])
 def register():
 
-    return redirect(
-        url_for("index")
-    )
+    return redirect(url_for("index"))
 
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
 
-    return redirect(
-        url_for("index")
-    )
+    return redirect(url_for("index"))
 
 
 @app.route("/logout", methods=["GET", "POST"])
 def logout():
 
-    return redirect(
-        url_for("index")
-    )
+    return redirect(url_for("index"))
 
 
 @app.route("/dashboard")
 def dashboard():
 
-    return redirect(
-        url_for("index")
-    )
+    return redirect(url_for("index"))
 
 
 # ==========================================
 # URL SCANNER
 # ==========================================
 
-@app.route(
-    "/scan/url",
-    methods=["GET", "POST"]
-)
+@app.route("/scan/url", methods=["GET", "POST"])
 def scan_url():
 
     form = URLForm()
 
     if form.validate_on_submit():
 
-        allowed, message = check_rate_limit()
-
-        if not allowed:
-
-            flash(
-                message,
-                "error"
-            )
-
-            return render_template(
-                "scan_url.html",
-                form=form
-            )
-
         raw_url = form.url.data.strip()
 
-        parsed = urlsplit(
-            raw_url
-        )
+        try:
 
-        if (
-            parsed.scheme not in (
-                "http",
-                "https"
-            )
-            or not parsed.hostname
-            or parsed.username
-            or parsed.password
-        ):
+            parsed = urlsplit(raw_url)
 
-            flash(
-                "الرابط غير صالح.",
-                "error"
-            )
+            if (
+                parsed.scheme.lower() not in ("http", "https")
+                or not parsed.hostname
+                or parsed.username
+                or parsed.password
+            ):
+                flash("الرابط غير صالح.", "error")
+                return render_template(
+                    "scan_url.html",
+                    form=form
+                )
 
+        except ValueError:
+            flash("الرابط غير صالح.", "error")
             return render_template(
                 "scan_url.html",
                 form=form
@@ -367,44 +342,21 @@ def scan_url():
 
         try:
 
-            response = requests.post(
-                f"{VT_API}/urls",
-                headers=vt_headers(),
-                data={
-                    "url": raw_url
-                },
+            response = vt_request(
+                "POST",
+                "urls",
+                data={"url": raw_url},
                 timeout=30
             )
 
-            response.raise_for_status()
+            analysis_id = response.json()["data"]["id"]
 
-            analysis_id = response.json()[
-                "data"
-            ]["id"]
+            stats = poll_analysis(analysis_id)
 
-            stats = poll_analysis(
-                analysis_id
-            )
-
-            (
-                malicious,
-                suspicious,
-                harmless,
-                undetected,
-                percentage,
-                verdict
-            ) = stats_result(stats)
-
-            return render_template(
-                "result.html",
-                item=raw_url,
-                kind="رابط",
-                malicious=malicious,
-                suspicious=suspicious,
-                harmless=harmless,
-                undetected=undetected,
-                percent=percentage,
-                verdict=verdict
+            return show_result(
+                raw_url,
+                "رابط",
+                stats
             )
 
         except requests.HTTPError as error:
@@ -416,16 +368,16 @@ def scan_url():
             )
 
             flash(
-                f"رفضت VirusTotal الطلب "
-                f"(HTTP {code}). "
-                "تحقق من صلاحية API وحدود الحساب.",
+                f"تعذر إكمال الفحص (HTTP {code}). "
+                "تحقق من صلاحية الخدمة وحدود الاستخدام.",
                 "error"
             )
 
         except (
             requests.RequestException,
             RuntimeError,
-            KeyError
+            KeyError,
+            ValueError
         ) as error:
 
             flash(
@@ -443,46 +395,18 @@ def scan_url():
 # FILE SCANNER
 # ==========================================
 
-@app.route(
-    "/scan/file",
-    methods=["GET", "POST"]
-)
+@app.route("/scan/file", methods=["GET", "POST"])
 def scan_file():
 
     form = FileConsentForm()
 
-    if (
-        request.method == "POST"
-        and form.validate_on_submit()
-    ):
+    if request.method == "POST" and form.validate_on_submit():
 
-        allowed, message = check_rate_limit()
+        uploaded = request.files.get("file")
 
-        if not allowed:
+        if not uploaded or not uploaded.filename:
 
-            flash(
-                message,
-                "error"
-            )
-
-            return render_template(
-                "scan_file.html",
-                form=form
-            )
-
-        uploaded = request.files.get(
-            "file"
-        )
-
-        if (
-            not uploaded
-            or not uploaded.filename
-        ):
-
-            flash(
-                "اختر ملفاً أولاً.",
-                "error"
-            )
+            flash("اختر ملفاً أولاً.", "error")
 
             return render_template(
                 "scan_file.html",
@@ -495,19 +419,12 @@ def scan_file():
             .replace("\\", "_")
         )[:180]
 
-        data = uploaded.read(
-            32 * 1024 * 1024 + 1
-        )
+        data = uploaded.read(32 * 1024 * 1024 + 1)
 
-        if (
-            not data
-            or len(data)
-            > 32 * 1024 * 1024
-        ):
+        if not data or len(data) > 32 * 1024 * 1024:
 
             flash(
-                "الملف فارغ أو يتجاوز "
-                "32 ميجابايت.",
+                "الملف فارغ أو يتجاوز 32 ميجابايت.",
                 "error"
             )
 
@@ -516,82 +433,73 @@ def scan_file():
                 form=form
             )
 
-        digest = hashlib.sha256(
-            data
-        ).hexdigest()
+        digest = hashlib.sha256(data).hexdigest()
 
         try:
 
-            lookup = requests.get(
-                f"{VT_API}/files/{digest}",
-                headers=vt_headers(),
-                timeout=25
+            # البحث أولاً عن بصمة الملف.
+            lookup = vt_request(
+                "GET",
+                f"files/{digest}",
+                timeout=30
             )
 
-            if lookup.status_code == 200:
+            stats = lookup.json().get(
+                "data", {}
+            ).get(
+                "attributes", {}
+            ).get(
+                "last_analysis_stats", {}
+            )
 
-                stats = (
-                    lookup.json()
-                    .get("data", {})
-                    .get("attributes", {})
-                    .get(
-                        "last_analysis_stats",
-                        {}
-                    )
+            return show_result(
+                filename,
+                "ملف",
+                stats,
+                digest
+            )
+
+        except requests.HTTPError as error:
+
+            code = (
+                error.response.status_code
+                if error.response is not None
+                else "?"
+            )
+
+            if code != 404:
+
+                flash(
+                    f"تعذر البحث عن الملف (HTTP {code}).",
+                    "error"
                 )
 
-            elif lookup.status_code == 404:
-
-                upload = requests.post(
-                    f"{VT_API}/files",
-                    headers=vt_headers(),
-                    files={
-                        "file": (
-                            filename,
-                            data
-                        )
-                    },
-                    timeout=90
+                return render_template(
+                    "scan_file.html",
+                    form=form
                 )
 
-                upload.raise_for_status()
+        try:
 
-                analysis_id = (
-                    upload.json()
-                    ["data"]
-                    ["id"]
-                )
+            # رفع الملف إذا لم تكن له نتيجة سابقة.
+            upload = vt_request(
+                "POST",
+                "files",
+                files={
+                    "file": (filename, data)
+                },
+                timeout=120
+            )
 
-                stats = poll_analysis(
-                    analysis_id
-                )
+            analysis_id = upload.json()["data"]["id"]
 
-            else:
+            stats = poll_analysis(analysis_id)
 
-                lookup.raise_for_status()
-
-                stats = {}
-
-            (
-                malicious,
-                suspicious,
-                harmless,
-                undetected,
-                percentage,
-                verdict
-            ) = stats_result(stats)
-
-            return render_template(
-                "result.html",
-                item=filename,
-                kind="ملف",
-                malicious=malicious,
-                suspicious=suspicious,
-                harmless=harmless,
-                undetected=undetected,
-                percent=percentage,
-                verdict=verdict,
-                digest=digest
+            return show_result(
+                filename,
+                "ملف",
+                stats,
+                digest
             )
 
         except requests.HTTPError as error:
@@ -603,20 +511,19 @@ def scan_file():
             )
 
             flash(
-                f"رفضت VirusTotal الطلب "
-                f"(HTTP {code}). "
-                "تحقق من صلاحية API وحدود الحساب.",
+                f"تعذر رفع الملف أو فحصه (HTTP {code}).",
                 "error"
             )
 
         except (
             requests.RequestException,
             RuntimeError,
-            KeyError
+            KeyError,
+            ValueError
         ) as error:
 
             flash(
-                f"تعذر إكمال الفحص: {error}",
+                f"تعذر إكمال فحص الملف: {error}",
                 "error"
             )
 
@@ -638,9 +545,7 @@ def too_large(error):
         "error"
     )
 
-    return redirect(
-        url_for("scan_file")
-    )
+    return redirect(url_for("scan_file"))
 
 
 # ==========================================
@@ -650,9 +555,12 @@ def too_large(error):
 @app.errorhandler(500)
 def internal_error(error):
 
-    return render_template(
-        "index.html"
-    ), 500
+    app.logger.exception("Internal server error")
+
+    return (
+        "حدث خطأ داخلي. حاول مرة أخرى لاحقاً.",
+        500
+    )
 
 
 # ==========================================
@@ -663,11 +571,6 @@ if __name__ == "__main__":
 
     app.run(
         host="0.0.0.0",
-        port=int(
-            os.environ.get(
-                "PORT",
-                5000
-            )
-        ),
+        port=int(os.environ.get("PORT", 5000)),
         debug=False
     )
