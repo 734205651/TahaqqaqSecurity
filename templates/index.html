@@ -1,39 +1,36 @@
-
 {% extends "base.html" %}
 
 {% block content %}
 
-<section class="panel p-5 text-center mt-4">
+<section class="glass-card">
 
-    <h1 class="brand">
-        مركز الفحص الأمني
-    </h1>
+    <div class="hero">
 
-    <p class="muted mt-3">
-        افحص الروابط والملفات للتحقق من مؤشرات التهديدات الأمنية.
-    </p>
+        <div class="hero-icon">🛡️</div>
 
-    <p class="muted">
-        لا يحتاج المشارك إلى إنشاء حساب أو تسجيل الدخول.
-    </p>
+        <h1 class="brand display-5 fw-bold">
+            مركز الفحص الأمني
+        </h1>
 
-    <div class="mt-4">
+        <p class="muted fs-5 mt-3">
+            افحص الروابط والملفات للتحقق من مؤشرات التهديدات الأمنية.
+        </p>
 
-        <a
-            class="btn btn-main btn-lg"
-            href="{{ url_for('scan_url') }}"
-        >
-            🔍 ابدأ فحص رابط
-        </a>
+        <p class="muted mt-3">
+            لا يحتاج المشارك إلى إنشاء حساب أو تسجيل الدخول.
+        </p>
 
     </div>
 
-    <div class="mt-3">
+    <div class="d-grid gap-3">
 
-        <a
-            class="btn btn-outline-info btn-lg"
-            href="{{ url_for('scan_file') }}"
-        >
+        <a href="{{ url_for('scan_url') }}"
+           class="btn-main">
+            🔗 ابدأ فحص رابط
+        </a>
+
+        <a href="{{ url_for('scan_file') }}"
+           class="btn-secondary-glass">
             📄 فحص ملف
         </a>
 
