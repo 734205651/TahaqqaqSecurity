@@ -1,3 +1,4 @@
+
 {% extends "base.html" %}
 
 {% block content %}
@@ -9,7 +10,7 @@
     </h1>
 
     <p class="muted mt-3">
-        افحص سمعة الروابط والملفات باستخدام VirusTotal.
+        افحص الروابط والملفات للتحقق من مؤشرات التهديدات الأمنية.
     </p>
 
     <p class="muted">
@@ -30,7 +31,7 @@
     <div class="mt-3">
 
         <a
-            class="btn btn-outline-info"
+            class="btn btn-outline-info btn-lg"
             href="{{ url_for('scan_file') }}"
         >
             📄 فحص ملف
