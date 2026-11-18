@@ -4,26 +4,38 @@
 
 <section class="panel p-5 text-center mt-4">
 
-    <h1 class="brand">مركز الفحص الأمني</h1>
+    <h1 class="brand">
+        مركز الفحص الأمني
+    </h1>
 
     <p class="muted mt-3">
         افحص سمعة الروابط والملفات باستخدام VirusTotal.
     </p>
 
     <p class="muted">
-        يمكنك استخدام منصة الفحص مباشرة دون إنشاء حساب أو تسجيل الدخول.
+        لا يحتاج المشارك إلى إنشاء حساب أو تسجيل الدخول.
     </p>
 
     <div class="mt-4">
-        <a class="btn btn-main btn-lg" href="{{ url_for('scan_url') }}">
-            فحص رابط
+
+        <a
+            class="btn btn-main btn-lg"
+            href="{{ url_for('scan_url') }}"
+        >
+            🔍 ابدأ فحص رابط
         </a>
+
     </div>
 
     <div class="mt-3">
-        <a class="btn btn-outline-info btn-lg" href="{{ url_for('scan_file') }}">
-            فحص ملف
+
+        <a
+            class="btn btn-outline-info"
+            href="{{ url_for('scan_file') }}"
+        >
+            📄 فحص ملف
         </a>
+
     </div>
 
 </section>
