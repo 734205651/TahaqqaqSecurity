@@ -1,1 +1,56 @@
-{% extends "base.html" %}{% block content %}<div class="panel p-4 mt-4"><h2 class="brand">فحص سمعة رابط</h2><form method="post">{{ form.hidden_tag() }}<label class="form-label mt-3">{{ form.url.label }}</label>{{ form.url(class="form-control",placeholder="https://example.com") }}<div class="form-check my-3">{{ form.consent(class="form-check-input") }}<label class="form-check-label">{{ form.consent.label.text }}</label></div><button class="btn btn-main">إرسال للفحص</button></form></div>{% endblock %}
+
+{% extends "base.html" %}
+
+{% block content %}
+
+<div class="panel p-4 mt-4">
+
+    <h2 class="brand mb-4">فحص سمعة رابط</h2>
+
+    <form method="post">
+
+        {{ form.hidden_tag() }}
+
+        <label class="form-label mt-2">
+            الرابط المراد فحصه
+        </label>
+
+        {{ form.url(
+            class="form-control",
+            placeholder="https://example.com",
+            dir="ltr"
+        ) }}
+
+        {% for error in form.url.errors %}
+            <div class="text-danger small mt-2">
+                {{ error }}
+            </div>
+        {% endfor %}
+
+        <div class="form-check my-4">
+
+            {{ form.consent(class="form-check-input") }}
+
+            <label class="form-check-label">
+                أوافق
+            </label>
+
+        </div>
+
+        <div class="muted small mb-4">
+            تنبيه الخصوصية: سيتم إرسال الرابط إلى خدمة فحص
+            أمنية خارجية لتحليله. لا ترسل روابط خاصة أو سرية.
+        </div>
+
+        <button
+            type="submit"
+            class="btn btn-main btn-lg w-100"
+        >
+            🔍 إرسال للفحص
+        </button>
+
+    </form>
+
+</div>
+
+{% endblock %}
