@@ -4,178 +4,322 @@
 {% block content %}
 
 <style>
+
 .result-panel {
     width: 100%;
     max-width: 100%;
     min-width: 0;
+    padding: 25px;
     overflow: hidden;
-    padding: 24px;
 }
 
-.result-item {
-    display: block;
-    width: 100%;
-    max-width: 100%;
+.risk-gauge {
+    --score: {{ percent }}%;
+    width: 190px;
+    height: 190px;
+    margin: 25px auto;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    background:
+        conic-gradient(
+            var(--gauge-color) var(--score),
+            rgba(130,160,180,.16) var(--score)
+        );
+    box-shadow: 0 0 28px rgba(45,212,191,.12);
+    position: relative;
+}
+
+.risk-gauge::before {
+    content: "";
+    position: absolute;
+    inset: 13px;
+    border-radius: 50%;
+    background: #102338;
+    border: 1px solid rgba(45,212,191,.2);
+}
+
+.gauge-content {
+    position: relative;
+    z-index: 1;
+    text-align: center;
+}
+
+.gauge-number {
+    font-size: 39px;
+    font-weight: 800;
+    color: var(--gauge-color);
+    line-height: 1.3;
+}
+
+.gauge-label {
+    color: #B5C7D5;
+    font-size: 13px;
+}
+
+.risk-status {
+    display: inline-block;
+    padding: 10px 20px;
+    border-radius: 30px;
+    font-weight: 700;
+    font-size: 16px;
+    background: rgba(45,212,191,.10);
+    color: #2DD4BF;
+    border: 1px solid rgba(45,212,191,.3);
+}
+
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 12px;
+    margin-top: 25px;
+}
+
+.stat-card {
     min-width: 0;
+    padding: 18px 8px;
+    text-align: center;
+    background: rgba(18,55,72,.75);
+    border: 1px solid rgba(45,212,191,.2);
+    border-radius: 18px;
+}
+
+.stat-label {
+    color: #B5C7D5;
+    font-size: 14px;
+    overflow-wrap: anywhere;
+}
+
+.stat-number {
+    font-size: 27px;
+    font-weight: 800;
+    margin-top: 8px;
+}
+
+.stat-danger { color: #F07878; }
+.stat-warning { color: #F5C45C; }
+.stat-safe { color: #2DD4BF; }
+.stat-neutral { color: #B5C7D5; }
+
+.result-item {
+    width: 100%;
+    min-width: 0;
+    padding: 13px;
+    margin: 12px 0;
     direction: ltr;
     text-align: left;
     overflow-wrap: anywhere;
     word-break: break-all;
-    white-space: normal;
-    font-size: 15px;
-    color: #d9eaf5;
-    background: #18344d;
-    border: 1px solid #31536d;
-    border-radius: 10px;
-    padding: 12px;
-    margin: 12px 0;
-}
-
-.result-box {
-    height: 100%;
-    min-width: 0;
-    overflow-wrap: anywhere;
-    text-align: center;
-}
-
-.result-number {
-    font-size: 24px;
-    font-weight: bold;
+    background: rgba(27,65,82,.72);
+    border: 1px solid rgba(130,210,220,.25);
+    border-radius: 13px;
+    color: #D9EAF5;
+    font-size: 14px;
 }
 
 .result-note {
+    color: #B5C7D5;
     line-height: 1.9;
-    overflow-wrap: anywhere;
+    font-size: 14px;
 }
 
-.progress {
-    height: 25px;
+.result-progress {
+    width: 100%;
+    height: 12px;
+    background: rgba(130,160,180,.16);
+    border-radius: 20px;
     overflow: hidden;
-    border-radius: 10px;
+    margin-top: 15px;
 }
 
-.progress-bar {
-    min-width: 0;
+.result-progress-fill {
+    height: 100%;
+    width: {{ percent }}%;
+    background: var(--gauge-color);
+    border-radius: 20px;
 }
 
-@media (max-width: 576px) {
+@media(max-width: 576px) {
+
     .result-panel {
-        padding: 15px !important;
-        margin-top: 12px !important;
+        padding: 16px !important;
     }
 
-    .result-panel h2 {
-        font-size: 22px;
+    .risk-gauge {
+        width: 165px;
+        height: 165px;
     }
 
-    .result-panel h3 {
-        font-size: 19px;
+    .gauge-number {
+        font-size: 34px;
+    }
+
+    .stats-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 9px;
+    }
+
+    .stat-card {
+        padding: 15px 7px;
+    }
+
+    .stat-number {
+        font-size: 24px;
     }
 
     .result-item {
         font-size: 12px;
-        padding: 10px;
-    }
-
-    .result-number {
-        font-size: 21px;
-    }
-
-    .result-box {
-        padding: 12px !important;
-    }
-
-    .result-panel .btn {
-        width: 100%;
-        white-space: normal;
     }
 }
+
 </style>
 
-<div class="panel result-panel mt-4">
+{% if total == 0 %}
+    {% set gauge_color = "#A9BDCE" %}
+{% elif malicious > 0 %}
+    {% set gauge_color = "#F07878" %}
+{% elif suspicious > 0 %}
+    {% set gauge_color = "#F5C45C" %}
+{% else %}
+    {% set gauge_color = "#2DD4BF" %}
+{% endif %}
 
-    <h2 class="brand mb-3">
-        نتيجة الفحص
+<div class="panel result-panel mt-4"
+     style="--gauge-color: {{ gauge_color }};">
+
+    <h2 class="brand text-center mb-3">
+        نتيجة الفحص الأمني
     </h2>
 
-    <h5 class="muted">
-        العنصر الذي تم فحصه:
-    </h5>
+    <p class="muted text-center">
+        {{ kind }} تم فحصه
+    </p>
 
     <div class="result-item">
         {{ item }}
     </div>
 
-    <h3 class="my-4 text-center">
-        {{ verdict }}
-    </h3>
+    {% if total > 0 %}
 
-    <div class="progress my-3">
-        <div
-            class="progress-bar bg-danger"
-            role="progressbar"
-            style="width: {{ percent }}%;"
-            aria-valuenow="{{ percent }}"
-            aria-valuemin="0"
-            aria-valuemax="100"
-        >
-            {{ percent }}%
-        </div>
-    </div>
+    <h5 class="text-center muted mt-4">
+        مؤشر اكتشاف التهديدات
+    </h5>
 
-    <div class="row g-3 mt-3">
+    <div class="risk-gauge">
 
-        {% for label, value in [
-            ('ضار', malicious),
-            ('مشبوه', suspicious),
-            ('لم يجد مشكلة', harmless),
-            ('غير محسوم', undetected)
-        ] %}
+        <div class="gauge-content">
 
-        <div class="col-6 col-md-3">
+            <div class="gauge-number">
+                {{ "%.1f"|format(percent) }}%
+            </div>
 
-            <div class="panel result-box p-3">
-
-                <div>{{ label }}</div>
-
-                <div class="result-number mt-2">
-                    {{ value }}
-                </div>
-
+            <div class="gauge-label">
+                نسبة الاكتشاف
             </div>
 
         </div>
 
-        {% endfor %}
+    </div>
+
+    <div class="text-center mb-3">
+        <span class="risk-status">
+            {{ risk_level }}
+        </span>
+    </div>
+
+    <div class="result-progress">
+        <div class="result-progress-fill"></div>
+    </div>
+
+    {% else %}
+
+    <div class="text-center my-4">
+        <span class="risk-status">
+            لم تكتمل نتائج الفحص
+        </span>
+        <p class="muted mt-2">
+            لا يمكن حساب نسبة موثوقة دون نتائج مكتملة.
+        </p>
+    </div>
+
+    {% endif %}
+
+    <h5 class="brand mt-4 mb-3">
+        تفاصيل نتائج المحركات
+    </h5>
+
+    <div class="stats-grid">
+
+        <div class="stat-card">
+            <div class="stat-label">ضار</div>
+            <div class="stat-number stat-danger">
+                {{ malicious }}
+            </div>
+        </div>
+
+        <div class="stat-card">
+            <div class="stat-label">مشبوه</div>
+            <div class="stat-number stat-warning">
+                {{ suspicious }}
+            </div>
+        </div>
+
+        <div class="stat-card">
+            <div class="stat-label">لم يجد مشكلة</div>
+            <div class="stat-number stat-safe">
+                {{ harmless }}
+            </div>
+        </div>
+
+        <div class="stat-card">
+            <div class="stat-label">غير محسوم</div>
+            <div class="stat-number stat-neutral">
+                {{ undetected }}
+            </div>
+        </div>
+
+    </div>
+
+    <div class="panel p-3 mt-4">
+
+        <div class="d-flex justify-content-between">
+            <span class="muted">إجمالي النتائج المحتسبة</span>
+            <strong>{{ total }}</strong>
+        </div>
+
+        {% if total > 0 %}
+        <div class="d-flex justify-content-between mt-2">
+            <span class="muted">المكتشف ضارًا أو مشبوهًا</span>
+            <strong>{{ malicious + suspicious }}</strong>
+        </div>
+        {% endif %}
 
     </div>
 
     {% if digest is defined and digest %}
 
-    <div class="mt-4">
+    <h6 class="brand mt-4">
+        بصمة الملف SHA-256
+    </h6>
 
-        <h6 class="brand">
-            بصمة الملف SHA-256
-        </h6>
-
-        <div class="result-item">
-            {{ digest }}
-        </div>
-
+    <div class="result-item">
+        {{ digest }}
     </div>
 
     {% endif %}
 
-    <p class="muted result-note mt-4">
-        النسبة تمثل حصة نتائج محركات الفحص التي صنفت العنصر
-        على أنه ضار أو مشبوه، وليست احتمال الإصابة.
-        وعدم الكشف عن تهديد لا يثبت السلامة بشكل قطعي.
-    </p>
+    <div class="privacy mt-4">
+        <span class="lock-icon">🔒</span>
+        <span>
+            هذه النسبة تمثل نسبة المحركات التي صنفت العنصر
+            ضارًا أو مشبوهًا من النتائج المكتملة.
+            لا تعني احتمال الإصابة، وعدم اكتشاف تهديد
+            لا يثبت السلامة بشكل قطعي.
+        </span>
+    </div>
 
-    <a
-        class="btn btn-main btn-lg mt-3"
-        href="{{ url_for('index') }}"
-    >
+    <a href="{{ url_for('index') }}"
+       class="btn-main mt-3">
         العودة إلى الصفحة الرئيسية
     </a>
 
