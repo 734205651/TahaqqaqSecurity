@@ -1,3 +1,4 @@
+
 <!doctype html>
 <html lang="ar" dir="rtl">
 
@@ -13,17 +14,32 @@
     >
 
     <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        html, body {
+            width: 100%;
+            max-width: 100%;
+            overflow-x: hidden;
+        }
+
         body {
             background: #081321;
             color: #f3f8fc;
             font-family: Tahoma, Arial;
         }
 
-        .navbar,
-        .panel {
+        .navbar, .panel {
             background: #102338;
             border: 1px solid #24516b;
             border-radius: 16px;
+        }
+
+        .navbar {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
         }
 
         .brand {
@@ -38,6 +54,7 @@
         .btn-main {
             background: #147d82;
             color: white;
+            border: none;
         }
 
         .btn-main:hover {
@@ -46,6 +63,9 @@
         }
 
         .form-control {
+            width: 100%;
+            max-width: 100%;
+            min-width: 0;
             background: #18344d;
             color: white;
             border-color: #31536d;
@@ -65,6 +85,73 @@
             color: white;
             padding: 10px;
             border-radius: 8px;
+        }
+
+        .panel {
+            min-width: 0;
+            max-width: 100%;
+            overflow-wrap: anywhere;
+        }
+
+        img, video {
+            max-width: 100%;
+            height: auto;
+        }
+
+        a, p, h1, h2, h3, td {
+            overflow-wrap: anywhere;
+        }
+
+        footer {
+            padding: 15px;
+        }
+
+        @media (max-width: 576px) {
+
+            .navbar {
+                margin: 10px !important;
+                padding: 12px !important;
+                justify-content: center;
+            }
+
+            .navbar .navbar-brand {
+                width: 100%;
+                text-align: center;
+            }
+
+            .navbar .ms-auto {
+                width: 100%;
+                display: flex;
+                gap: 8px;
+            }
+
+            .navbar .btn {
+                flex: 1;
+                white-space: normal;
+                font-size: 12px;
+            }
+
+            .container {
+                padding-left: 12px;
+                padding-right: 12px;
+            }
+
+            .panel {
+                padding: 16px !important;
+                margin-top: 12px !important;
+            }
+
+            h1 {
+                font-size: 24px;
+            }
+
+            h2 {
+                font-size: 21px;
+            }
+
+            .btn-lg {
+                font-size: 15px;
+            }
         }
     </style>
 </head>
