@@ -1,1 +1,58 @@
-{% extends "base.html" %}{% block content %}<div class="panel p-4 mt-4"><h2 class="brand">فحص ملف</h2><p class="text-warning">سيتم إرسال الملف إلى VirusTotal وقد يُخزن أو يُشارك. لا ترفع ملفات خاصة أو سرية.</p><form method="post" enctype="multipart/form-data">{{ form.hidden_tag() }}<input class="form-control my-3" type="file" name="file" required><div class="form-check my-3">{{ form.consent(class="form-check-input") }}<label class="form-check-label">{{ form.consent.label.text }}</label></div><button class="btn btn-main">رفع وفحص الملف</button></form></div>{% endblock %}
+
+{% extends "base.html" %}
+
+{% block content %}
+
+<div class="panel p-4 mt-4">
+
+    <h2 class="brand mb-3">
+        فحص ملف
+    </h2>
+
+    <p class="muted mb-4">
+        افحص ملفك للتحقق من وجود مؤشرات تهديد أمنية.
+    </p>
+
+    <form method="post" enctype="multipart/form-data">
+
+        {{ form.hidden_tag() }}
+
+        <label class="form-label">
+            اختر الملف المراد فحصه
+        </label>
+
+        <input
+            class="form-control my-3"
+            type="file"
+            name="file"
+            required
+        >
+
+        <div class="form-check my-4">
+
+            {{ form.consent(class="form-check-input") }}
+
+            <label class="form-check-label">
+                أوافق
+            </label>
+
+        </div>
+
+        <p class="muted small mb-4">
+            تنبيه الخصوصية: سيتم إرسال الملف إلى خدمة
+            فحص أمنية خارجية، وقد يتم تخزينه أو مشاركته.
+            لا ترفع ملفات شخصية أو سرية.
+        </p>
+
+        <button
+            type="submit"
+            class="btn btn-main btn-lg w-100"
+        >
+            رفع وفحص الملف
+        </button>
+
+    </form>
+
+</div>
+
+{% endblock %}
