@@ -4,90 +4,92 @@
 {% block content %}
 
 <style>
+.result-panel {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    overflow: hidden;
+    padding: 24px;
+}
+
+.result-item {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    direction: ltr;
+    text-align: left;
+    overflow-wrap: anywhere;
+    word-break: break-all;
+    white-space: normal;
+    font-size: 15px;
+    color: #d9eaf5;
+    background: #18344d;
+    border: 1px solid #31536d;
+    border-radius: 10px;
+    padding: 12px;
+    margin: 12px 0;
+}
+
+.result-box {
+    height: 100%;
+    min-width: 0;
+    overflow-wrap: anywhere;
+    text-align: center;
+}
+
+.result-number {
+    font-size: 24px;
+    font-weight: bold;
+}
+
+.result-note {
+    line-height: 1.9;
+    overflow-wrap: anywhere;
+}
+
+.progress {
+    height: 25px;
+    overflow: hidden;
+    border-radius: 10px;
+}
+
+.progress-bar {
+    min-width: 0;
+}
+
+@media (max-width: 576px) {
     .result-panel {
-        width: 100%;
-        max-width: 100%;
-        overflow: hidden;
-        padding: 24px;
+        padding: 15px !important;
+        margin-top: 12px !important;
+    }
+
+    .result-panel h2 {
+        font-size: 22px;
+    }
+
+    .result-panel h3 {
+        font-size: 19px;
     }
 
     .result-item {
-        display: block;
-        width: 100%;
-        max-width: 100%;
-        direction: ltr;
-        text-align: left;
-        overflow-wrap: anywhere;
-        word-break: break-word;
-        white-space: normal;
-        font-size: 15px;
-        color: #d9eaf5;
-        background: #18344d;
-        border: 1px solid #31536d;
-        border-radius: 10px;
-        padding: 12px;
-        margin: 12px 0;
-    }
-
-    .result-box {
-        height: 100%;
-        min-width: 0;
-        overflow-wrap: anywhere;
-        text-align: center;
+        font-size: 12px;
+        padding: 10px;
     }
 
     .result-number {
-        font-size: 24px;
-        font-weight: bold;
+        font-size: 21px;
     }
 
-    .result-note {
-        line-height: 1.9;
-        overflow-wrap: anywhere;
+    .result-box {
+        padding: 12px !important;
     }
 
-    .progress {
-        height: 25px;
-        overflow: hidden;
-        border-radius: 10px;
+    .result-panel .btn {
+        width: 100%;
+        white-space: normal;
     }
-
-    .progress-bar {
-        min-width: 0;
-    }
-
-    @media (max-width: 576px) {
-        .result-panel {
-            padding: 16px !important;
-            margin-top: 12px !important;
-        }
-
-        .result-panel h2 {
-            font-size: 23px;
-        }
-
-        .result-panel h3 {
-            font-size: 19px;
-        }
-
-        .result-item {
-            font-size: 13px;
-            padding: 10px;
-        }
-
-        .result-number {
-            font-size: 21px;
-        }
-
-        .result-box {
-            padding: 12px !important;
-        }
-
-        .result-panel .btn {
-            width: 100%;
-            white-space: normal;
-        }
-    }
+}
 </style>
 
 <div class="panel result-panel mt-4">
@@ -100,7 +102,7 @@
         العنصر الذي تم فحصه:
     </h5>
 
-    <div class="result-item" dir="ltr">
+    <div class="result-item">
         {{ item }}
     </div>
 
@@ -109,7 +111,6 @@
     </h3>
 
     <div class="progress my-3">
-
         <div
             class="progress-bar bg-danger"
             role="progressbar"
@@ -120,7 +121,6 @@
         >
             {{ percent }}%
         </div>
-
     </div>
 
     <div class="row g-3 mt-3">
@@ -158,7 +158,7 @@
             بصمة الملف SHA-256
         </h6>
 
-        <div class="result-item" dir="ltr">
+        <div class="result-item">
             {{ digest }}
         </div>
 
