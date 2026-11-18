@@ -1,51 +1,45 @@
-
 import os
 import hashlib
 import time
-from datetime import datetime, timezone
+from collections import deque
+from threading import Lock
 from urllib.parse import urlsplit
 
 import requests
 
 from flask import (
-    Flask, render_template, request,
-    redirect, url_for, flash
-)
-
-from flask_sqlalchemy import SQLAlchemy
-from flask_login import (
-    LoginManager, UserMixin, login_user,
-    login_required, logout_user, current_user
+    Flask,
+    render_template,
+    request,
+    redirect,
+    url_for,
+    flash
 )
 
 from flask_wtf import FlaskForm, CSRFProtect
-from werkzeug.security import (
-    generate_password_hash, check_password_hash
-)
-
-from wtforms import StringField, PasswordField, BooleanField
-from wtforms.validators import (
-    DataRequired, Length, EqualTo, Email
-)
+from wtforms import StringField, BooleanField
+from wtforms.validators import DataRequired, Length
 
 
 # ==========================================
-# T A H A Q Q A Q  5.0
+# T A H A Q Q A Q  6.0
 # منصة تَحَقَّق للأمن السيبراني
 # تصميم: محروس باحسين
+# دخول مباشر بدون حسابات
 # ==========================================
 
 APP_NAME = "تَحَقَّق"
-VERSION = "5.0"
+VERSION = "6.0"
 AUTHOR = "محروس باحسين"
 
 VT_API = "https://www.virustotal.com/api/v3"
 
-app = Flask(__name__)
 
 # ==========================================
-# DATABASE CONFIGURATION
+# APPLICATION
 # ==========================================
+
+app = Flask(__name__)
 
 app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY")
 
@@ -54,173 +48,70 @@ if not app.config["SECRET_KEY"]:
         "SECRET_KEY غير مضبوط في إعدادات Render."
     )
 
-db_url = os.environ.get(
-    "DATABASE_URL",
-    "sqlite:///tahaqqaq.db"
-)
-
-# PostgreSQL + psycopg driver
-if db_url.startswith("postgres://"):
-    db_url = db_url.replace(
-        "postgres://",
-        "postgresql+psycopg://",
-        1
-    )
-
-elif db_url.startswith("postgresql://"):
-    db_url = db_url.replace(
-        "postgresql://",
-        "postgresql+psycopg://",
-        1
-    )
-
-app.config["SQLALCHEMY_DATABASE_URI"] = db_url
-app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
-
-app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
-    "pool_pre_ping": True
-}
-
+# الحد الأقصى لحجم الملف: 32 ميجابايت
 app.config["MAX_CONTENT_LENGTH"] = 32 * 1024 * 1024
-
-db = SQLAlchemy(app)
 
 csrf = CSRFProtect(app)
 
-login_manager = LoginManager(app)
-login_manager.login_view = "login"
-login_manager.login_message = "يرجى تسجيل الدخول أولاً."
-
 
 # ==========================================
-# DATABASE MODELS
+# RATE LIMITING
 # ==========================================
+# 4 طلبات كحد أقصى في الدقيقة
+# 500 طلب كحد أقصى في اليوم
+#
+# هذه النسخة تستخدم ذاكرة الخادم فقط.
+# عند إعادة تشغيل Render يتم تصفير العدادات.
 
-class User(UserMixin, db.Model):
+RATE_LOCK = Lock()
 
-    id = db.Column(db.Integer, primary_key=True)
+MINUTE_LIMIT = 4
+DAILY_LIMIT = 500
 
-    username = db.Column(
-        db.String(40),
-        unique=True,
-        nullable=False
-    )
-
-    email = db.Column(
-        db.String(254),
-        unique=True,
-        nullable=False
-    )
-
-    password_hash = db.Column(
-        db.String(255),
-        nullable=False
-    )
-
-    created_at = db.Column(
-        db.DateTime,
-        default=lambda: datetime.now(timezone.utc)
-    )
-
-    scans = db.relationship(
-        "Scan",
-        backref="user",
-        lazy=True
-    )
+minute_requests = deque()
+daily_requests = deque()
 
 
-class Scan(db.Model):
+def check_rate_limit():
 
-    id = db.Column(db.Integer, primary_key=True)
+    now = time.time()
 
-    user_id = db.Column(
-        db.Integer,
-        db.ForeignKey("user.id"),
-        nullable=False
-    )
+    with RATE_LOCK:
 
-    kind = db.Column(db.String(20), nullable=False)
+        # حذف طلبات أقدم من دقيقة
+        while minute_requests and (
+            now - minute_requests[0] > 60
+        ):
+            minute_requests.popleft()
 
-    item = db.Column(db.String(500), nullable=False)
+        # حذف طلبات أقدم من 24 ساعة
+        while daily_requests and (
+            now - daily_requests[0] > 86400
+        ):
+            daily_requests.popleft()
 
-    verdict = db.Column(db.String(120), nullable=False)
+        if len(minute_requests) >= MINUTE_LIMIT:
+            return False, (
+                "تم الوصول إلى الحد المؤقت: "
+                "4 فحوصات في الدقيقة. "
+                "انتظر قليلاً ثم حاول مرة أخرى."
+            )
 
-    malicious = db.Column(db.Integer, default=0)
+        if len(daily_requests) >= DAILY_LIMIT:
+            return False, (
+                "تم الوصول إلى الحد اليومي "
+                "للفحوصات. حاول غداً."
+            )
 
-    suspicious = db.Column(db.Integer, default=0)
+        minute_requests.append(now)
+        daily_requests.append(now)
 
-    harmless = db.Column(db.Integer, default=0)
-
-    undetected = db.Column(db.Integer, default=0)
-
-    created_at = db.Column(
-        db.DateTime,
-        default=lambda: datetime.now(timezone.utc)
-    )
-
-
-# ==========================================
-# LOGIN MANAGEMENT
-# ==========================================
-
-@login_manager.user_loader
-def load_user(user_id):
-
-    return db.session.get(User, int(user_id))
+    return True, None
 
 
 # ==========================================
 # FORMS
 # ==========================================
-
-class RegisterForm(FlaskForm):
-
-    username = StringField(
-        "اسم المستخدم",
-        validators=[
-            DataRequired(),
-            Length(min=3, max=40)
-        ]
-    )
-
-    email = StringField(
-        "البريد الإلكتروني",
-        validators=[
-            DataRequired(),
-            Email(),
-            Length(max=254)
-        ]
-    )
-
-    password = PasswordField(
-        "كلمة المرور",
-        validators=[
-            DataRequired(),
-            Length(min=12, max=128)
-        ]
-    )
-
-    confirm = PasswordField(
-        "تأكيد كلمة المرور",
-        validators=[
-            DataRequired(),
-            EqualTo("password")
-        ]
-    )
-
-
-class LoginForm(FlaskForm):
-
-    email = StringField(
-        "البريد الإلكتروني",
-        validators=[DataRequired(), Email()]
-    )
-
-    password = PasswordField(
-        "كلمة المرور",
-        validators=[DataRequired()]
-    )
-
 
 class URLForm(FlaskForm):
 
@@ -252,13 +143,16 @@ class FileConsentForm(FlaskForm):
 
 def vt_headers():
 
-    key = os.environ.get("VT_API_KEY", "").strip()
+    key = os.environ.get(
+        "VT_API_KEY",
+        ""
+    ).strip()
 
     if not key:
 
         raise RuntimeError(
             "فحص VirusTotal غير مفعّل حالياً. "
-            "يجب إعداد مفتاح API مرخص للاستخدام المقصود."
+            "أضف VT_API_KEY في إعدادات Render."
         )
 
     return {
@@ -273,13 +167,21 @@ def vt_headers():
 
 def stats_result(stats):
 
-    malicious = int(stats.get("malicious", 0) or 0)
+    malicious = int(
+        stats.get("malicious", 0) or 0
+    )
 
-    suspicious = int(stats.get("suspicious", 0) or 0)
+    suspicious = int(
+        stats.get("suspicious", 0) or 0
+    )
 
-    harmless = int(stats.get("harmless", 0) or 0)
+    harmless = int(
+        stats.get("harmless", 0) or 0
+    )
 
-    undetected = int(stats.get("undetected", 0) or 0)
+    undetected = int(
+        stats.get("undetected", 0) or 0
+    )
 
     total = sum(
         int(stats.get(k, 0) or 0)
@@ -337,12 +239,19 @@ def poll_analysis(analysis_id):
         response.raise_for_status()
 
         attributes = response.json().get(
-            "data", {}
-        ).get("attributes", {})
+            "data",
+            {}
+        ).get(
+            "attributes",
+            {}
+        )
 
         if attributes.get("status") == "completed":
 
-            return attributes.get("stats", {})
+            return attributes.get(
+                "stats",
+                {}
+            )
 
         time.sleep(5)
 
@@ -352,155 +261,53 @@ def poll_analysis(analysis_id):
 
 
 # ==========================================
-# SAVE SCAN
-# ==========================================
-
-def save_scan(kind, item, stats, verdict):
-
-    m, s, h, u, _, _ = stats_result(stats)
-
-    scan = Scan(
-        user_id=current_user.id,
-        kind=kind,
-        item=item[:500],
-        verdict=verdict,
-        malicious=m,
-        suspicious=s,
-        harmless=h,
-        undetected=u
-    )
-
-    db.session.add(scan)
-
-    db.session.commit()
-
-
-# ==========================================
 # HOME PAGE
 # ==========================================
 
 @app.route("/")
 def index():
 
-    return render_template("index.html")
+    return render_template(
+        "index.html"
+    )
 
 
 # ==========================================
-# USER REGISTRATION
+# OLD ACCOUNT ROUTES
 # ==========================================
+# لا يوجد تسجيل أو دخول.
+# هذه المسارات موجودة فقط حتى لا تظهر
+# أخطاء إذا كانت هناك روابط قديمة في القوالب.
 
 @app.route("/register", methods=["GET", "POST"])
 def register():
 
-    form = RegisterForm()
-
-    if form.validate_on_submit():
-
-        username = form.username.data.strip()
-
-        email = form.email.data.strip().lower()
-
-        existing = User.query.filter(
-            (User.username == username) |
-            (User.email == email)
-        ).first()
-
-        if existing:
-
-            flash(
-                "اسم المستخدم أو البريد مستخدم بالفعل.",
-                "error"
-            )
-
-        else:
-
-            user = User(
-                username=username,
-                email=email,
-                password_hash=generate_password_hash(
-                    form.password.data
-                )
-            )
-
-            db.session.add(user)
-
-            db.session.commit()
-
-            login_user(user)
-
-            return redirect(url_for("dashboard"))
-
-    return render_template(
-        "register.html",
-        form=form
+    return redirect(
+        url_for("index")
     )
 
-
-# ==========================================
-# USER LOGIN
-# ==========================================
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
 
-    form = LoginForm()
-
-    if form.validate_on_submit():
-
-        user = User.query.filter_by(
-            email=form.email.data.strip().lower()
-        ).first()
-
-        if user and check_password_hash(
-            user.password_hash,
-            form.password.data
-        ):
-
-            login_user(user)
-
-            return redirect(url_for("dashboard"))
-
-        flash(
-            "بيانات الدخول غير صحيحة.",
-            "error"
-        )
-
-    return render_template(
-        "login.html",
-        form=form
+    return redirect(
+        url_for("index")
     )
 
 
-# ==========================================
-# LOGOUT
-# ==========================================
-
-@app.post("/logout")
-@login_required
+@app.route("/logout", methods=["GET", "POST"])
 def logout():
 
-    logout_user()
+    return redirect(
+        url_for("index")
+    )
 
-    return redirect(url_for("index"))
-
-
-# ==========================================
-# USER DASHBOARD
-# ==========================================
 
 @app.route("/dashboard")
-@login_required
 def dashboard():
 
-    scans = Scan.query.filter_by(
-        user_id=current_user.id
-    ).order_by(
-        Scan.created_at.desc()
-    ).limit(30).all()
-
-    return render_template(
-        "dashboard.html",
-        scans=scans
+    return redirect(
+        url_for("index")
     )
 
 
@@ -508,20 +315,41 @@ def dashboard():
 # URL SCANNER
 # ==========================================
 
-@app.route("/scan/url", methods=["GET", "POST"])
-@login_required
+@app.route(
+    "/scan/url",
+    methods=["GET", "POST"]
+)
 def scan_url():
 
     form = URLForm()
 
     if form.validate_on_submit():
 
+        allowed, message = check_rate_limit()
+
+        if not allowed:
+
+            flash(
+                message,
+                "error"
+            )
+
+            return render_template(
+                "scan_url.html",
+                form=form
+            )
+
         raw_url = form.url.data.strip()
 
-        parsed = urlsplit(raw_url)
+        parsed = urlsplit(
+            raw_url
+        )
 
         if (
-            parsed.scheme not in ("http", "https")
+            parsed.scheme not in (
+                "http",
+                "https"
+            )
             or not parsed.hostname
             or parsed.username
             or parsed.password
@@ -542,35 +370,39 @@ def scan_url():
             response = requests.post(
                 f"{VT_API}/urls",
                 headers=vt_headers(),
-                data={"url": raw_url},
+                data={
+                    "url": raw_url
+                },
                 timeout=30
             )
 
             response.raise_for_status()
 
-            analysis_id = response.json()["data"]["id"]
+            analysis_id = response.json()[
+                "data"
+            ]["id"]
 
-            stats = poll_analysis(analysis_id)
-
-            m, s, h, u, percentage, verdict = stats_result(
-                stats
+            stats = poll_analysis(
+                analysis_id
             )
 
-            save_scan(
-                "رابط",
-                raw_url,
-                stats,
+            (
+                malicious,
+                suspicious,
+                harmless,
+                undetected,
+                percentage,
                 verdict
-            )
+            ) = stats_result(stats)
 
             return render_template(
                 "result.html",
                 item=raw_url,
                 kind="رابط",
-                malicious=m,
-                suspicious=s,
-                harmless=h,
-                undetected=u,
+                malicious=malicious,
+                suspicious=suspicious,
+                harmless=harmless,
+                undetected=undetected,
                 percent=percentage,
                 verdict=verdict
             )
@@ -584,7 +416,8 @@ def scan_url():
             )
 
             flash(
-                f"رفضت VirusTotal الطلب (HTTP {code}). "
+                f"رفضت VirusTotal الطلب "
+                f"(HTTP {code}). "
                 "تحقق من صلاحية API وحدود الحساب.",
                 "error"
             )
@@ -610,17 +443,41 @@ def scan_url():
 # FILE SCANNER
 # ==========================================
 
-@app.route("/scan/file", methods=["GET", "POST"])
-@login_required
+@app.route(
+    "/scan/file",
+    methods=["GET", "POST"]
+)
 def scan_file():
 
     form = FileConsentForm()
 
-    if request.method == "POST" and form.validate_on_submit():
+    if (
+        request.method == "POST"
+        and form.validate_on_submit()
+    ):
 
-        uploaded = request.files.get("file")
+        allowed, message = check_rate_limit()
 
-        if not uploaded or not uploaded.filename:
+        if not allowed:
+
+            flash(
+                message,
+                "error"
+            )
+
+            return render_template(
+                "scan_file.html",
+                form=form
+            )
+
+        uploaded = request.files.get(
+            "file"
+        )
+
+        if (
+            not uploaded
+            or not uploaded.filename
+        ):
 
             flash(
                 "اختر ملفاً أولاً.",
@@ -632,20 +489,25 @@ def scan_file():
                 form=form
             )
 
-        filename = uploaded.filename.replace(
-            "/", "_"
-        ).replace(
-            "\\", "_"
+        filename = (
+            uploaded.filename
+            .replace("/", "_")
+            .replace("\\", "_")
         )[:180]
 
         data = uploaded.read(
             32 * 1024 * 1024 + 1
         )
 
-        if not data or len(data) > 32 * 1024 * 1024:
+        if (
+            not data
+            or len(data)
+            > 32 * 1024 * 1024
+        ):
 
             flash(
-                "الملف فارغ أو يتجاوز 32 ميجابايت.",
+                "الملف فارغ أو يتجاوز "
+                "32 ميجابايت.",
                 "error"
             )
 
@@ -654,7 +516,9 @@ def scan_file():
                 form=form
             )
 
-        digest = hashlib.sha256(data).hexdigest()
+        digest = hashlib.sha256(
+            data
+        ).hexdigest()
 
         try:
 
@@ -666,12 +530,14 @@ def scan_file():
 
             if lookup.status_code == 200:
 
-                stats = lookup.json().get(
-                    "data", {}
-                ).get(
-                    "attributes", {}
-                ).get(
-                    "last_analysis_stats", {}
+                stats = (
+                    lookup.json()
+                    .get("data", {})
+                    .get("attributes", {})
+                    .get(
+                        "last_analysis_stats",
+                        {}
+                    )
                 )
 
             elif lookup.status_code == 404:
@@ -680,16 +546,25 @@ def scan_file():
                     f"{VT_API}/files",
                     headers=vt_headers(),
                     files={
-                        "file": (filename, data)
+                        "file": (
+                            filename,
+                            data
+                        )
                     },
                     timeout=90
                 )
 
                 upload.raise_for_status()
 
-                analysis_id = upload.json()["data"]["id"]
+                analysis_id = (
+                    upload.json()
+                    ["data"]
+                    ["id"]
+                )
 
-                stats = poll_analysis(analysis_id)
+                stats = poll_analysis(
+                    analysis_id
+                )
 
             else:
 
@@ -697,25 +572,23 @@ def scan_file():
 
                 stats = {}
 
-            m, s, h, u, percentage, verdict = stats_result(
-                stats
-            )
-
-            save_scan(
-                "ملف",
-                filename,
-                stats,
+            (
+                malicious,
+                suspicious,
+                harmless,
+                undetected,
+                percentage,
                 verdict
-            )
+            ) = stats_result(stats)
 
             return render_template(
                 "result.html",
                 item=filename,
                 kind="ملف",
-                malicious=m,
-                suspicious=s,
-                harmless=h,
-                undetected=u,
+                malicious=malicious,
+                suspicious=suspicious,
+                harmless=harmless,
+                undetected=undetected,
                 percent=percentage,
                 verdict=verdict,
                 digest=digest
@@ -730,7 +603,8 @@ def scan_file():
             )
 
             flash(
-                f"رفضت VirusTotal الطلب (HTTP {code}). "
+                f"رفضت VirusTotal الطلب "
+                f"(HTTP {code}). "
                 "تحقق من صلاحية API وحدود الحساب.",
                 "error"
             )
@@ -764,16 +638,21 @@ def too_large(error):
         "error"
     )
 
-    return redirect(url_for("scan_file"))
+    return redirect(
+        url_for("scan_file")
+    )
 
 
 # ==========================================
-# DATABASE INITIALIZATION
+# ERROR HANDLER
 # ==========================================
 
-with app.app_context():
+@app.errorhandler(500)
+def internal_error(error):
 
-    db.create_all()
+    return render_template(
+        "index.html"
+    ), 500
 
 
 # ==========================================
@@ -784,6 +663,11 @@ if __name__ == "__main__":
 
     app.run(
         host="0.0.0.0",
-        port=int(os.environ.get("PORT", 5000)),
+        port=int(
+            os.environ.get(
+                "PORT",
+                5000
+            )
+        ),
         debug=False
     )
