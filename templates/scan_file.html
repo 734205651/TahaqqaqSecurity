@@ -1,15 +1,16 @@
-
 {% extends "base.html" %}
 
 {% block content %}
 
-<div class="panel p-4 mt-4">
+<section class="glass-card">
 
-    <h2 class="brand mb-3">
+    <div class="screen-art">📄 🛡️</div>
+
+    <h2 class="brand text-center mb-3">
         فحص ملف
     </h2>
 
-    <p class="muted mb-4">
+    <p class="muted text-center mb-4">
         افحص ملفك للتحقق من وجود مؤشرات تهديد أمنية.
     </p>
 
@@ -17,42 +18,39 @@
 
         {{ form.hidden_tag() }}
 
-        <label class="form-label">
+        <label class="form-label mb-2">
             اختر الملف المراد فحصه
         </label>
 
         <input
-            class="form-control my-3"
+            class="form-control mb-3"
             type="file"
             name="file"
             required
         >
 
         <div class="form-check my-4">
-
             {{ form.consent(class="form-check-input") }}
-
-            <label class="form-check-label">
+            <label class="form-check-label" for="{{ form.consent.id }}">
                 أوافق
             </label>
-
         </div>
 
-        <p class="muted small mb-4">
-            تنبيه الخصوصية: سيتم إرسال الملف إلى خدمة
-            فحص أمنية خارجية، وقد يتم تخزينه أو مشاركته.
-            لا ترفع ملفات شخصية أو سرية.
-        </p>
+        <div class="privacy">
+            <span class="lock-icon">🔒</span>
+            <span>
+                تنبيه الخصوصية: سيتم إرسال الملف إلى خدمة
+                فحص أمنية خارجية، وقد يتم تخزينه أو مشاركته.
+                لا ترفع ملفات شخصية أو سرية.
+            </span>
+        </div>
 
-        <button
-            type="submit"
-            class="btn btn-main btn-lg w-100"
-        >
-            رفع وفحص الملف
+        <button type="submit" class="btn-main">
+            ⬆️ رفع وفحص الملف
         </button>
 
     </form>
 
-</div>
+</section>
 
 {% endblock %}
